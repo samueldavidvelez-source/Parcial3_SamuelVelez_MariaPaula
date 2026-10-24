@@ -287,3 +287,77 @@ class EstudioDicom:
         cv2.imwrite('resultados/imagen_ecualizada_' + nombre + '.png', ecualizada)
         plt.show()
         print('Resultados guardados en la carpeta resultados')
+    # PUNTO 6: binarizar, apertura, connectedComponents, circulo y area en mm2
+    def segmentar(self, plano, numero, tam_kernel, iteraciones):
+        os.makedirs('resultados', exist_ok=True)
+
+        img, mm = self.obtener_corte(self.volumen, plano, numero)
+        if img is None:
+            return
+
+        # binarizar con Otsu invertido: los huecos son oscuros y quedan en blanco
+        # (antes se suaviza para que el ruido no deje puntos sueltos)
+        suavizada = cv2.GaussianBlur(img, (5, 5), 0)
+        umbral, binaria = cv2.threshold(suavizada, 0, 255, cv2.THRESH_BINARY_INV + cv2.THRESH_OTSU)
+
+        # apertura con el kernel y las iteraciones del usuario (kernel elipse)
+        kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (tam_kernel, tam_kernel))
+        apertura = cv2.morphologyEx(binaria, cv2.MORPH_OPEN, kernel, iterations=iteraciones)
+
+        # zonas conectadas (la 0 es el fondo)
+        cantidad, etiquetas = cv2.connectedComponents(apertura)
+        print('Zonas encontradas:', cantidad - 1)
+
+        # zona de interes = la mas grande que no toca el borde de la imagen
+        # (las que tocan el borde son el aire de afuera del cuerpo)
+        areas = np.bincount(etiquetas.flatten())
+        bordes = np.concatenate([etiquetas[0, :], etiquetas[-1, :], etiquetas[:, 0], etiquetas[:, -1]])
+        mejor = 0
+        mejor_area = 0
+        for k in range(1, cantidad):
+            if k in bordes:
+                continue
+            if areas[k] > mejor_area:
+                mejor_area = areas[k]
+                mejor = k
+        if mejor == 0:
+            print('No se encontro zona de interes, pruebe otro kernel u otro corte')
+            return
+
+        # area en mm2 = pixeles * mm del pixel al cuadrado
+        area_mm2 = mejor_area * mm * mm
+
+        # centro y radio del circulo
+        filas, columnas = np.where(etiquetas == mejor)
+        centro = (int(columnas.mean()), int(filas.mean()))
+        radio = int(max(columnas.max() - columnas.min(), filas.max() - filas.min()) / 2) + 15
+
+        # pasar a RGB y dibujar el circulo a color
+        alto, ancho = apertura.shape
+        rgb = cv2.cvtColor(apertura, cv2.COLOR_GRAY2RGB)
+        grosor = max(2, ancho // 150)
+        cv2.circle(rgb, centro, radio, (255, 100, 0), grosor)
+
+        # texto con las dimensiones de la imagen en mm y el area
+        texto = str(round(ancho * mm, 1)) + ' x ' + str(round(alto * mm, 1)) + ' mm'
+        tamanho = max(0.5, ancho / 700)
+        linea = int(40 * tamanho)
+        cv2.putText(rgb, texto, (10, linea), cv2.FONT_HERSHEY_SIMPLEX, tamanho, (255, 0, 0), max(1, grosor // 2))
+        cv2.putText(rgb, 'Area: ' + str(round(area_mm2, 1)) + ' mm2', (10, 2 * linea),
+                    cv2.FONT_HERSHEY_SIMPLEX, tamanho, (255, 0, 0), max(1, grosor // 2))
+
+        plt.figure(figsize=(12, 6))
+        plt.subplot(1, 2, 1)
+        plt.imshow(img, cmap='gray', vmin=0, vmax=255)
+        plt.title('Corte ' + plano + ' ' + str(numero) + ' (' + texto + ')')
+        plt.subplot(1, 2, 2)
+        plt.imshow(rgb)
+        plt.title('Zona de interes: ' + str(round(area_mm2, 1)) + ' mm2')
+        plt.tight_layout()
+
+        nombre = self.nombre + '_' + plano + '_' + str(numero)
+        plt.savefig('resultados/grafico_segmentacion_' + nombre + '.png')
+        cv2.imwrite('resultados/imagen_segmentada_' + nombre + '.png', cv2.cvtColor(rgb, cv2.COLOR_RGB2BGR))
+        plt.show()
+        print('Area aproximada:', round(area_mm2, 2), 'mm2')
+        print('Resultados guardados en la carpeta resultados')
