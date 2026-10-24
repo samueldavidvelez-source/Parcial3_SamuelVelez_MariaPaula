@@ -96,3 +96,75 @@ class EstudioDicom:
         self.angulo = grados
         self.corte_rotado = corte
         return self.corte_corregido
+    def ver_informacion(self):
+        print('Grupo                  ', self.grupo)
+        print('Carpeta                ', self.carpeta)
+        print('Nombre del paciente    ', self.nombre_paciente)
+        print('ID del paciente        ', self.id_paciente)
+        print('Modalidad              ', self.modalidad)
+        print('Filas                  ', self.filas)
+        print('Columnas               ', self.columnas)
+        print('Numero de cortes       ', len(self.cortes))
+        print('Voxel alto, ancho, largo (mm)  ', self.voxel_alto, self.voxel_ancho, self.voxel_largo)
+        print('Tamanho matriz original        ', np.shape(self.matriz_pixeles))
+        print('Tamanho volumen escalado       ', np.shape(self.volumen))
+        print('Voxel volumen escalado (mm)    ', self.voxel_alto_volumen, self.voxel_ancho_volumen, self.voxel_largo)
+
+    # Muestra los 3 planos del volumen
+    def graficar_volumen(self):
+        f, c, n = np.shape(self.volumen)
+
+        # plano 1: corte del medio
+        plano1 = self.volumen[:, :, n // 2]
+
+        # plano 2 y 3: se redimensionan con cv2.resize para respetar los mm del voxel
+        # (el espacio entre cortes es mayor que el tamanho del pixel)
+        plano2 = self.volumen[f // 2, :, :]
+        ancho2 = int(n * self.voxel_largo / self.voxel_ancho_volumen)
+        plano2 = cv2.resize(plano2, (ancho2, c), interpolation=cv2.INTER_LINEAR)
+
+        plano3 = self.volumen[:, c // 2, :]
+        ancho3 = int(n * self.voxel_largo / self.voxel_alto_volumen)
+        plano3 = cv2.resize(plano3, (ancho3, f), interpolation=cv2.INTER_LINEAR)
+
+        # en imagenes axiales los cortes van de arriba a abajo: se transpone la matriz
+        if self.axial:
+            plano2 = plano2.T
+            plano3 = plano3.T
+            if self.invertir:
+                plano2 = plano2[::-1, :]
+                plano3 = plano3[::-1, :]
+
+        if self.axial:
+            # los planos son anchos y bajitos: el corte va a la izquierda
+            # y los dos planos uno encima del otro a la derecha
+            plt.figure(figsize=(15, 8))
+            plt.subplot(1, 2, 1)
+            plt.imshow(plano1, cmap='gray')
+            plt.title('Corte ' + str(n // 2))
+            plt.axis('off')
+            plt.subplot(2, 2, 2)
+            plt.imshow(plano2, cmap='gray')
+            plt.title('Plano fila ' + str(f // 2))
+            plt.axis('off')
+            plt.subplot(2, 2, 4)
+            plt.imshow(plano3, cmap='gray')
+            plt.title('Plano columna ' + str(c // 2))
+            plt.axis('off')
+        else:
+            plt.figure(figsize=(15, 6))
+            plt.subplot(1, 3, 1)
+            plt.imshow(plano1, cmap='gray')
+            plt.title('Corte ' + str(n // 2))
+            plt.axis('off')
+            plt.subplot(1, 3, 2)
+            plt.imshow(plano2, cmap='gray')
+            plt.title('Plano fila ' + str(f // 2))
+            plt.axis('off')
+            plt.subplot(1, 3, 3)
+            plt.imshow(plano3, cmap='gray')
+            plt.title('Plano columna ' + str(c // 2))
+            plt.axis('off')
+        plt.suptitle('Reconstruccion 3D - ' + self.nombre)
+        plt.tight_layout()
+        plt.show()
