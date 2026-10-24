@@ -238,3 +238,52 @@ class EstudioDicom:
 
         img = np.ascontiguousarray(img)
         return img, mm_fila     # ahora cada pixel mide mm_fila x mm_fila
+    # PUNTO 5: copia del volumen, normalizar a uint8, ecualizar e histogramas
+    def ecualizar_corte(self, plano, numero):
+        os.makedirs('resultados', exist_ok=True)
+
+        copia = self.volumen.copy()
+        normalizada, mm = self.obtener_corte(copia, plano, numero)
+        if normalizada is None:
+            return
+
+        # se suaviza un poco antes de ecualizar: la ecualizacion estira el fondo
+        # oscuro y vuelve visible el ruido (puntos blancos y negros)
+        suavizada = cv2.GaussianBlur(normalizada, (5, 5), 0)
+
+        # el ruido del fondo oscuro se estira al ecualizar: los tonos muy bajos
+        # (menos de la mitad del umbral de Otsu) se llevan a 0 ANTES de ecualizar
+        umbral, otsu = cv2.threshold(suavizada, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
+        suavizada[suavizada < umbral * 0.5] = 0
+        ecualizada = cv2.equalizeHist(suavizada)
+
+        hist_antes = cv2.calcHist([normalizada], [0], None, [256], [0, 256])
+        hist_despues = cv2.calcHist([ecualizada], [0], None, [256], [0, 256])
+
+        plt.figure(figsize=(11, 7))
+        plt.subplot(2, 2, 1)
+        plt.imshow(normalizada, cmap='gray', vmin=0, vmax=255)
+        plt.title('Corte normalizado (uint8)')
+        plt.axis('off')
+        plt.subplot(2, 2, 2)
+        plt.imshow(ecualizada, cmap='gray', vmin=0, vmax=255)
+        plt.title('Corte suavizado y ecualizado')
+        plt.axis('off')
+        plt.subplot(2, 2, 3)
+        plt.plot(hist_antes)
+        plt.title('Histograma antes')
+        plt.xlabel('Intensidad (0-255)')
+        plt.ylabel('Pixeles')
+        plt.subplot(2, 2, 4)
+        plt.plot(hist_despues)
+        plt.title('Histograma despues')
+        plt.xlabel('Intensidad (0-255)')
+        plt.ylabel('Pixeles')
+        plt.suptitle(self.nombre + ' - ' + plano + ' ' + str(numero))
+        plt.tight_layout()
+
+        nombre = self.nombre + '_' + plano + '_' + str(numero)
+        plt.savefig('resultados/grafico_ecualizacion_' + nombre + '.png')
+        cv2.imwrite('resultados/imagen_ecualizada_' + nombre + '.png', ecualizada)
+        plt.show()
+        print('Resultados guardados en la carpeta resultados')
