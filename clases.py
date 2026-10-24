@@ -168,3 +168,73 @@ class EstudioDicom:
         plt.suptitle('Reconstruccion 3D - ' + self.nombre)
         plt.tight_layout()
         plt.show()
+    def graficar_correccion(self):
+        plt.figure(figsize=(15, 6))
+        plt.subplot(1, 2, 1)
+        plt.imshow(self.volumen[:, :, self.corte_rotado], cmap='gray')
+        plt.title('Original')
+        plt.axis('off')
+        plt.subplot(1, 2, 2)
+        plt.imshow(self.corte_corregido, cmap='gray')
+        plt.title('Corregido ' + str(self.angulo) + ' grados')
+        plt.axis('off')
+        plt.show()
+
+    # ================= PUNTOS 5 y 6 =================
+
+    # Saca un corte del volumen (plano y numero 1, 2, 3...), lo normaliza a uint8
+    # y corrige el aspect para que cada pixel mida lo mismo en alto y ancho
+    def obtener_corte(self, volumen, plano, numero):
+        # el volumen es (filas, columnas, cortes)
+        if self.axial:
+            ejes = {'transversal': 2, 'coronal': 0, 'sagital': 1}
+        else:
+            ejes = {'sagital': 2, 'transversal': 0, 'coronal': 1}
+
+        if plano not in ejes:
+            print('Plano no valido')
+            return None, None
+        eje = ejes[plano]
+        total = volumen.shape[eje]
+        if numero < 1 or numero > total:
+            print('Corte no valido, debe estar entre 1 y', total)
+            return None, None
+        i = numero - 1
+
+        # corte y tamanho en mm de sus filas y columnas (el volumen ya esta al doble)
+        if eje == 2:
+            corte = volumen[:, :, i]
+            mm_fila = self.voxel_alto_volumen
+            mm_col = self.voxel_ancho_volumen
+        elif eje == 0:
+            corte = volumen[i, :, :]
+            mm_fila = self.voxel_ancho_volumen
+            mm_col = self.voxel_largo
+        else:
+            corte = volumen[:, i, :]
+            mm_fila = self.voxel_alto_volumen
+            mm_col = self.voxel_largo
+
+        # se recortan los valores extremos (1% mas oscuro y 0.5% mas brillante)
+        # para que unos pocos pixeles muy brillantes no oscurezcan toda la imagen
+        corte = corte.astype(np.float32)
+        minimo = np.percentile(corte, 1)
+        maximo = np.percentile(corte, 99.5)
+        corte = np.clip(corte, minimo, maximo)
+
+        # normalizar a uint8
+        img = cv2.normalize(corte, None, 0, 255, cv2.NORM_MINMAX, cv2.CV_8U)
+
+        # aspect: se redimensiona igual que en graficar_volumen
+        if abs(mm_col / mm_fila - 1) > 0.01:
+            ancho_nuevo = int(img.shape[1] * mm_col / mm_fila)
+            img = cv2.resize(img, (ancho_nuevo, img.shape[0]), interpolation=cv2.INTER_LINEAR)
+
+        # en axiales los cortes van de arriba a abajo: se transpone
+        if self.axial and eje != 2:
+            img = img.T
+            if self.invertir:
+                img = img[::-1, :]
+
+        img = np.ascontiguousarray(img)
+        return img, mm_fila     # ahora cada pixel mide mm_fila x mm_fila
