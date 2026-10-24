@@ -426,3 +426,33 @@ class GestorDicom:
             for j in range(len(lista)):
                 e = lista[j]
                 print('     ' + str(j + 1) + '. ' + e.nombre, ' -> ', e.modalidad, np.shape(e.volumen))
+    def seleccionar(self):
+        if len(self.estudios) == 0:
+            print('Primero cargue un estudio')
+            return None
+        grupos = self.grupos()
+        for i in range(len(grupos)):
+            print(str(i + 1) + '. ' + grupos[i])
+        n = pedir_numero('Escriba el numero del grupo: ')
+        if n < 1 or n > len(grupos):
+            print('Numero no valido')
+            return None
+
+        lista = self.estudios_de(grupos[n - 1])
+        if len(lista) == 1:
+            return lista[0]
+        for j in range(len(lista)):
+            print(str(j + 1) + '. ' + lista[j].nombre, ' -> ', lista[j].modalidad, np.shape(lista[j].volumen))
+        m = pedir_numero('Escriba el numero del estudio: ')
+        if m < 1 or m > len(lista):
+            print('Numero no valido')
+            return None
+        return lista[m - 1]
+
+
+# Pide un numero entero; si no es numero devuelve -1
+def pedir_numero(texto):
+    valor = input(texto)
+    if valor.isdigit():
+        return int(valor)
+    return -1
