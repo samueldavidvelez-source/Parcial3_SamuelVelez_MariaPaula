@@ -361,3 +361,12 @@ class EstudioDicom:
         plt.show()
         print('Area aproximada:', round(area_mm2, 2), 'mm2')
         print('Resultados guardados en la carpeta resultados')
+class GestorDicom:
+    def __init__(self):
+        self.estudios = []      # lista de objetos EstudioDicom
+
+    # Crea el objeto de una carpeta que tiene archivos .dcm
+    def cargar_estudio(self, carpeta, grupo, nombre):
+        estudio = EstudioDicom(carpeta, grupo, nombre)
+        self.estudios.append(estudio)
+        print('Cargado ', nombre, np.shape(estudio.volumen))
