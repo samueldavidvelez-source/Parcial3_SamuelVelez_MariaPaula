@@ -370,3 +370,59 @@ class GestorDicom:
         estudio = EstudioDicom(carpeta, grupo, nombre)
         self.estudios.append(estudio)
         print('Cargado ', nombre, np.shape(estudio.volumen))
+
+    def buscar_carpetas(self, ruta, grupo, nombre):
+        tiene_dcm = False
+        for a in sorted(os.listdir(ruta)):
+            sub = os.path.join(ruta, a)
+            if os.path.isdir(sub):
+                self.buscar_carpetas(sub, grupo, nombre + '_' + a)
+            elif a.lower().endswith('.dcm'):
+                tiene_dcm = True
+        if tiene_dcm:
+            self.cargar_estudio(ruta, grupo, nombre)
+
+    # Carga una sola carpeta (el grupo es el nombre de la carpeta)
+    def cargar_carpeta(self, ruta):
+        if not os.path.isdir(ruta):
+            print('La carpeta no existe')
+            return
+        grupo = os.path.basename(os.path.normpath(ruta))
+        self.buscar_carpetas(ruta, grupo, grupo)
+
+    # Carga la carpeta datos: cada subcarpeta (PPMI, Sarcoma, T2) es un grupo
+    def cargar_datos(self, ruta='datos'):
+        if not os.path.isdir(ruta):
+            print('La carpeta no existe')
+            return
+        for g in sorted(os.listdir(ruta)):
+            if os.path.isdir(os.path.join(ruta, g)):
+                self.buscar_carpetas(os.path.join(ruta, g), g, g)
+
+    # Lista de grupos sin repetir
+    def grupos(self):
+        lista = []
+        for e in self.estudios:
+            if e.grupo not in lista:
+                lista.append(e.grupo)
+        return lista
+
+    # Estudios que pertenecen a un grupo
+    def estudios_de(self, grupo):
+        lista = []
+        for e in self.estudios:
+            if e.grupo == grupo:
+                lista.append(e)
+        return lista
+
+    # Muestra los grupos y sus estudios numerados
+    def listar(self):
+        if len(self.estudios) == 0:
+            print('No hay estudios cargados')
+        grupos = self.grupos()
+        for i in range(len(grupos)):
+            print(str(i + 1) + '. ' + grupos[i])
+            lista = self.estudios_de(grupos[i])
+            for j in range(len(lista)):
+                e = lista[j]
+                print('     ' + str(j + 1) + '. ' + e.nombre, ' -> ', e.modalidad, np.shape(e.volumen))
